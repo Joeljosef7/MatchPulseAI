@@ -1,3 +1,4 @@
+
 from dotenv import load_dotenv
 import os
 import logging
@@ -366,11 +367,11 @@ def main():
         .write_timeout(30)
         .build()
     )
-    app.add_handler(get_alerts_handler())
+    app.add_handler(get_alerts_handler(), group=0)
+    app.add_handler(CallbackQueryHandler(standings_callback), group=1)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("fixtures", fixtures))
     app.add_handler(CommandHandler("standings", standings))
-    app.add_handler(CallbackQueryHandler(standings_callback))
     app.add_handler(CommandHandler("score", score))
     app.add_handler(CommandHandler("myscore", myscore))
     app.add_handler(CommandHandler("help", help_command))
