@@ -583,6 +583,41 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
+ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
+
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    if user_id != ADMIN_ID:
+        return
+    
+    conn = __import__('sqlite3').connect("matchpulse.db")
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT COUNT(*) FROM users")
+    total_users = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(DISTINCT user_id) FROM followed_teams")
+    active_users = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT COUNT(*) FROM followed_teams")
+    total_follows = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT team_name, COUNT(*) as count FROM followed_teams GROUP BY team_name ORDER BY count DESC LIMIT 5")
+    top_teams = cursor.fetchall()
+    
+    conn.close()
+    
+    top_teams_text = "\n".join([f"• {team}: {count}" for team, count in top_teams])
+    
+    await update.message.reply_text(
+        f"📊 *MatchPulse AI Stats*\n\n"
+        f"👥 Total users: {total_users}\n"
+        f"⭐ Users following teams: {active_users}\n"
+        f"🔔 Total team follows: {total_follows}\n\n"
+        f"🏆 *Top 5 followed teams:*\n{top_teams_text}",
+        parse_mode="Markdown"
+    )
 
 def main():
     init_db()
@@ -602,6 +637,7 @@ def main():
     app.add_handler(CommandHandler("myscore", myscore))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CallbackQueryHandler(standings_callback), group=1)
+app.add_handler(CommandHandler("stats", stats))
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat_handler),
         group=2
