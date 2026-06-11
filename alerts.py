@@ -9,10 +9,8 @@ from telegram.ext import (
 )
 from database import follow_team, unfollow_team, get_followed_teams
 
-# Conversation states
 SEARCH, CONFIRM, UNFOLLOW_SELECT = range(3)
 
-# All 48 World Cup 2026 teams
 WC_TEAMS = [
 "Algeria", "Argentina", "Australia", "Austria", "Belgium", "Bosnia-Herzegovina", "Brazil", "Canada", "Cape Verde Islands", "Colombia", "Congo DR", "Croatia", "Curaçao", "Czechia", "Ecuador", "Egypt", "England", "France", "Germany", "Ghana", "Haiti", "Iran", "Iraq", "Ivory Coast", "Japan", "Jordan", "Mexico", "Morocco", "Netherlands", "New Zealand", "Norway", "Panama", "Paraguay", "Portugal", "Qatar", "Saudi Arabia", "Scotland", "Senegal", "South Africa", "South Korea", "Spain", "Sweden", "Switzerland", "Tunisia", "Turkey", "United States", "Uruguay", "Uzbekistan"
 ]
@@ -183,7 +181,6 @@ async def alerts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     user_id = query.from_user.id
 
-    # Search again
     if query.data == "search_again":
         context.user_data["follow_queue"] = []
         context.user_data["search_results"] = []
@@ -192,7 +189,6 @@ async def alerts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return SEARCH
 
-    # Done with alerts
     if query.data == "alerts_done":
         followed = get_followed_teams(user_id)
         if followed:
@@ -208,7 +204,6 @@ async def alerts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return ConversationHandler.END
 
-    # Toggle follow selection
     if query.data.startswith("toggle_follow_"):
         team_name = query.data.replace("toggle_follow_", "")
         follow_queue = context.user_data.get("follow_queue", [])
@@ -233,7 +228,6 @@ async def alerts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return CONFIRM
 
-    # Confirm following selected teams
     if query.data == "follow_done":
         follow_queue = context.user_data.get("follow_queue", [])
         if not follow_queue:
@@ -262,7 +256,7 @@ async def alerts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return CONFIRM
-        
+
     if query.data == "unfollow_menu":
         followed = get_followed_teams(user_id)
         if not followed:

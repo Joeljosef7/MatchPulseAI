@@ -1,33 +1,195 @@
-
 from dotenv import load_dotenv
 import os
 import logging
 import sys
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from database import init_db, add_user, follow_team, unfollow_team, get_followed_teams
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+    MessageHandler,
+    filters
+)
+from telegram.constants import ChatAction
+from database import init_db, add_user, get_followed_teams
 from alerts import get_alerts_handler
+from alerts_scheduler import check_upcoming_matches
+from fulltime_scheduler import check_fulltime_matches
 
 load_dotenv()
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "your_token_here")
 FOOTBALL_API_KEY = os.environ.get("FOOTBALL_API_KEY", "your_key_here")
+
 FOOTBALL_API_URL = "https://api.football-data.org/v4/"
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+
 if BOT_TOKEN == "your_token_here":
     print("❌ WARNING: BOT_TOKEN not set!")
     sys.exit()
 if FOOTBALL_API_KEY == "your_key_here":
     print("❌ WARNING: FOOTBALL_API_KEY not set!")
     sys.exit()
+if not GROQ_API_KEY:
+    print("❌ WARNING: GROQ_API_KEY not set!")
+    sys.exit()
+
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 
+FOOTBALL_KEYWORDS = [
+    "football", "soccer", "world cup", "goal", "offside",
+    "match", "player", "team", "coach", "fifa", "mbappe",
+    "messi", "ronaldo", "england", "france", "brazil",
+    "argentina", "spain", "germany", "vs", "preview",
+    "penalty", "striker", "midfielder", "defender", "keeper",
+    "tournament", "league", "cup", "score", "tactics"
+]
+
+def ask_groq(prompt):
+    print("ask_groq called")
+    try:
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "llama-3.3-70b-versatile",
+                "max_tokens": 250,
+                "temperature": 0.7,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are MatchPulse AI, a football expert focused on "
+                            "the FIFA World Cup. Keep the answer under 150 words and accurate."
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            },
+            timeout=30
+        )
+
+        print("Groq status:", response.status_code)
+
+        if response.status_code != 200:
+            print(response.text)
+            return None
+
+        data = response.json()
+
+        return data["choices"][0]["message"]["content"]
+
+
+    except Exception as e:
+        print("Groq error:", e)
+        return None
+
+async def ai_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_message = update.message.text.strip()
+    text = user_message.lower()
+
+    football_check = any(word in text for word in FOOTBALL_KEYWORDS)
+    question_words = ["what", "who", "how", "why", "when", "explain", "tell me", "is ", "are ", "does ", "do "]
+    is_question = any(text.startswith(w) for w in question_words)
+
+    if not football_check and not is_question:
+        await update.message.reply_text(
+            "⚽ MatchPulse AI focuses on football and the FIFA World Cup.\n\n"
+            "Try asking a football-related question."
+        )
+        return
+
+    if "preview" in text:
+        prompt = f"""You are MatchPulse AI, a football analyst focused on the FIFA World Cup.
+Be concise, engaging, and accurate. Never invent scores or statistics.
+
+Create a match preview for: {user_message}
+
+Include:
+- Current form and strengths
+- Key weaknesses
+- Players to watch
+- Tactical battle
+- What fans should look out for
+
+Keep it under 250 words."""
+
+    elif " vs " in text:
+        prompt = f"""
+You are MatchPulse AI.
+
+Compare:
+
+{user_message}
+
+Rules:
+- Stay neutral.
+- Do not automatically choose a winner.
+- Present both sides fairly.
+- If the comparison is subjective, say that opinions differ.
+
+Format:
+
+⚽ Playing Style
+⚽ Strengths
+⚽ Weaknesses
+⚽ Current Influence
+⚽ Final Verdict
+
+Keep under 150 words.
+"""
+
+    elif any(text.startswith(w) for w in ["what is", "what are", "how does", "how do", "why", "explain", "who is", "who are"]):
+        prompt = f"""
+You are MatchPulse AI.
+
+Explain:
+
+{user_message}
+
+Rules:
+- No greetings.
+- No introductions.
+- Use simple football language.
+- Keep under 120 words.
+"""
+
+    else:
+        prompt = f"""You are MatchPulse AI, a football analyst focused on the FIFA World Cup 2026.
+Answer this football question concisely: {user_message}
+
+Keep it under 200 words."""
+
+    await context.bot.send_chat_action(
+        chat_id=update.effective_chat.id,
+        action=ChatAction.TYPING
+    )
+
+    response = ask_groq(prompt)
+
+    if response:
+        await update.message.reply_text(response)
+    else:
+        await update.message.reply_text(
+            "⚠️ AI is unavailable right now. Please try again."
+        )
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    add_user(user.id, user.username, user.first_name)
     await update.message.reply_text(
         f"👋 Welcome {user.first_name} to MatchPulse AI!\n\n"
         "⚽ Your FIFA World Cup 2026 companion.\n\n"
@@ -35,11 +197,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📅 /fixtures - Today's matches\n"
         "📊 /standings - Group standings\n"
         "🔴 /score - Live scores\n"
-        "⭐ /myscore - Followed Team Live scores\n"
-        "🔔 /alerts - Match alerts\n"
+        "⭐ /myscore - Your teams live scores\n"
+        "🔔 /alerts - Manage followed teams\n"
         "❓ /help - All commands\n\n"
-        "Let's get started! Which team are you supporting? 🏆"
+        "💬 Just type any football question and I'll answer!\n\n"
+        "Let's get started! Use /alerts to follow your teams 🏆"
     )
+
 
 async def fixtures(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("📅 Fetching today's fixtures...")
@@ -62,14 +226,13 @@ async def fixtures(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message += f"⚽ {home} vs {away}\n📆 {date}\n\n"
         await update.message.reply_text(message, parse_mode="Markdown")
     else:
-      error_code = response.status_code
-      if error_code == 401:
-        await update.message.reply_text("❌ API authentication failed. Contact support.")
-      elif error_code == 429:
-        await update.message.reply_text("❌ Too many requests. Please wait a moment.")
-      else:
-        await update.message.reply_text(f"❌ Could not fetch data. Error: {error_code}") 
-
+        error_code = response.status_code
+        if error_code == 401:
+            await update.message.reply_text("❌ API authentication failed. Contact support.")
+        elif error_code == 429:
+            await update.message.reply_text("❌ Too many requests. Please wait a moment.")
+        else:
+            await update.message.reply_text(f"❌ Could not fetch data. Error: {error_code}")
 
 async def standings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.args:
@@ -94,8 +257,30 @@ async def standings(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"P{team['playedGames']} W{team['won']} D{team['draw']} L{team['lost']} | GD{team['goalDifference']:+d} | Pts {team['points']}\n\n"
                     )
                 await update.message.reply_text(message, parse_mode="Markdown")
-        elif choice == "myteam":
-            await update.message.reply_text("⭐ Set your favorite team first using /alerts")
+        elif choice == "myteams":
+            user_id = update.effective_user.id
+            followed = get_followed_teams(user_id)
+            if not followed:
+                await update.message.reply_text(
+                    "⭐ You're not following any teams yet.\n\nUse /alerts to follow your teams first."
+                )
+                return
+            await update.message.reply_text("📊 *Your Teams Standings:*", parse_mode="Markdown")
+            for group in groups:
+                group_has_followed_team = any(
+                    team["team"]["name"] in followed
+                    for team in group["table"]
+                )
+                if group_has_followed_team:
+                    message = f"*{group['group']}*\n\n"
+                    for team in group["table"]:
+                        name = team["team"]["name"]
+                        prefix = "⭐ " if name in followed else ""
+                        message += (
+                            f"{prefix}{team['position']}. {name}\n"
+                            f"P{team['playedGames']} W{team['won']} D{team['draw']} L{team['lost']} | GD{team['goalDifference']:+d} | Pts {team['points']}\n\n"
+                        )
+                    await update.message.reply_text(message, parse_mode="Markdown")
         else:
             found = False
             for group in groups:
@@ -117,7 +302,7 @@ async def standings(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("🔤 Pick a Group", callback_data="standings_pick"),
         ],
         [
-            InlineKeyboardButton("⭐ My Team's Group", callback_data="standings_myteam"),
+            InlineKeyboardButton("⭐ My Teams Group", callback_data="standings_myteam"),
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -179,9 +364,29 @@ async def standings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             reply_markup=InlineKeyboardMarkup(group_keyboard)
         )
     elif query.data == "standings_myteam":
-        await query.edit_message_text(
-            "⭐ Set your favorite team first using /alerts"
-        )
+        user_id = query.from_user.id
+        followed = get_followed_teams(user_id)
+        if not followed:
+            await query.edit_message_text(
+                "⭐ You're not following any teams yet.\n\nUse /alerts to follow your teams first."
+            )
+            return
+        await query.edit_message_text("📊 *Your Teams Standings:*", parse_mode="Markdown")
+        for group in groups:
+            group_has_followed_team = any(
+                team["team"]["name"] in followed
+                for team in group["table"]
+            )
+            if group_has_followed_team:
+                message = f"*{group['group']}*\n\n"
+                for team in group["table"]:
+                    name = team["team"]["name"]
+                    prefix = "⭐ " if name in followed else ""
+                    message += (
+                        f"{prefix}{team['position']}. {name}\n"
+                        f"P{team['playedGames']} W{team['won']} D{team['draw']} L{team['lost']} | GD{team['goalDifference']:+d} | Pts {team['points']}\n\n"
+                    )
+                await query.message.reply_text(message, parse_mode="Markdown")
     elif query.data.startswith("group_"):
         choice = query.data.split("_")[1]
         found = False
@@ -233,8 +438,6 @@ async def score(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("❌ Could not fetch scores. Try again later.")
         return
-
-    # No args — show all live matches with group picker
     headers = {"X-Auth-Token": FOOTBALL_API_KEY}
     response = requests.get(
         FOOTBALL_API_URL + "competitions/WC/matches?status=IN_PLAY,PAUSED,LIVE",
@@ -255,7 +458,7 @@ async def score(update: Update, context: ContextTypes.DEFAULT_TYPE):
             away = match["awayTeam"]["name"]
             home_score = match["score"]["fullTime"]["home"]
             away_score = match["score"]["fullTime"]["away"]
-            minute = match.get("minute", "?")
+            minute = match.get("minute") or match.get("currentPeriod", "?")
             message += (
                 f"⚽ {home} {home_score} - {away_score} {away}\n"
                 f"⏱ Minute: {minute}\n\n"
@@ -274,51 +477,27 @@ async def score(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❌ Could not fetch scores. Try again later.")
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    add_user(user.id, user.username, user.first_name)
-    await update.message.reply_text(
-        f"👋 Welcome {user.first_name} to MatchPulse AI!\n\n"
-        "⚽ Your FIFA World Cup 2026 companion.\n\n"
-        "Here's what I can do:\n"
-        "📅 /fixtures - Today's matches\n"
-        "📊 /standings - Group standings\n"
-        "🔴 /score - Live scores\n"
-        "🔔 /alerts - Manage followed teams\n"
-        "⭐ /myscore - Your teams live scores\n"
-        "❓ /help - All commands\n\n"
-        "Let's get started! Use /alerts to follow your teams 🏆"
-    )
-
 async def myscore(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     followed = get_followed_teams(user_id)
-
     if not followed:
         await update.message.reply_text(
             "⭐ You're not following any teams yet.\n\n"
             "Use /alerts to follow your teams first."
         )
         return
-
     await update.message.reply_text("🔍 Checking your teams...")
-
     headers = {"X-Auth-Token": FOOTBALL_API_KEY}
     response = requests.get(
         FOOTBALL_API_URL + "competitions/WC/matches?status=IN_PLAY,PAUSED,LIVE",
         headers=headers
     )
-
     if response.status_code != 200:
         await update.message.reply_text("❌ Could not fetch scores. Try again later.")
         return
-
     data = response.json()
     matches = data["matches"]
-
     message = "⭐ *Your Teams Live Scores:*\n\n"
-    found_any = False
-
     for team in followed:
         team_found = False
         for match in matches:
@@ -326,17 +505,15 @@ async def myscore(update: Update, context: ContextTypes.DEFAULT_TYPE):
             away = match["awayTeam"]["name"]
             if team.lower() in home.lower() or team.lower() in away.lower():
                 team_found = True
-                found_any = True
                 home_score = match["score"]["fullTime"]["home"]
                 away_score = match["score"]["fullTime"]["away"]
-                minute = match.get("minute", "?")
+                minute = match.get("minute") or match.get("currentPeriod", "?")
                 message += (
                     f"🔴 *{home} {home_score} - {away_score} {away}*\n"
                     f"⏱ Minute: {minute}\n\n"
                 )
         if not team_found:
             message += f"😴 *{team}* — Not playing right now\n\n"
-
     await update.message.reply_text(message, parse_mode="Markdown")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -348,14 +525,21 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔴 /score [team] — Specific team score\n"
         "⭐ /myscore — Your followed teams scores\n"
         "🔔 /alerts — Follow or unfollow teams\n\n"
+        "🤖 *AI Features — just type:*\n"
+        "• Preview England vs France\n"
+        "• Mbappe vs Vinicius\n"
+        "• What is offside?\n"
+        "• What is xG?\n"
+        "• Who are the favorites?\n\n"
         "💡 *Tips:*\n"
         "• Use acronyms: /score bra, /score eng\n"
         "• Standings by group: /standings A\n"
         "• All standings: /standings all\n"
         "• Your teams: /standings myteams\n\n"
-        "⚽ *World Cup 2026 starts June 11!*",
+        "🌎⚽ *World Cup 2026 — Live Now!*",
         parse_mode="Markdown"
     )
+
 
 def main():
     init_db()
@@ -368,13 +552,27 @@ def main():
         .build()
     )
     app.add_handler(get_alerts_handler(), group=0)
-    app.add_handler(CallbackQueryHandler(standings_callback), group=1)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("fixtures", fixtures))
     app.add_handler(CommandHandler("standings", standings))
     app.add_handler(CommandHandler("score", score))
     app.add_handler(CommandHandler("myscore", myscore))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CallbackQueryHandler(standings_callback), group=1)
+    app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat_handler),
+        group=2
+    )
+    app.job_queue.run_repeating(
+    check_upcoming_matches,
+    interval=600,
+    first=10
+    )
+    app.job_queue.run_repeating(
+    check_fulltime_matches,
+    interval=600,
+    first=20
+    )
     print("✅ MatchPulse AI is running...")
     app.run_polling()
 

@@ -1,10 +1,11 @@
 import sqlite3
 from datetime import datetime
 
+
 def init_db():
     conn = sqlite3.connect("matchpulse.db")
     cursor = conn.cursor()
-    
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -13,7 +14,7 @@ def init_db():
             joined_date TEXT
         )
     ''')
-    
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS followed_teams (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,7 +23,33 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users (user_id)
         )
     ''')
-    
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sent_alerts (
+            user_id INTEGER,
+            match_id INTEGER,
+            PRIMARY KEY (user_id, match_id)
+        )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS match_events_sent (
+        user_id INTEGER,
+        match_id INTEGER,
+        event_type TEXT,
+        event_value TEXT,
+        PRIMARY KEY (user_id, match_id, event_type, event_value)
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS fulltime_alerts (
+        user_id INTEGER,
+        match_id INTEGER,
+        PRIMARY KEY (user_id, match_id)
+     )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -76,3 +103,88 @@ def get_followed_teams(user_id):
     teams = [row[0] for row in cursor.fetchall()]
     conn.close()
     return teams
+
+def get_all_follows():
+    conn = sqlite3.connect("matchpulse.db")
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT user_id, team_name
+        FROM followed_teams
+    """)
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return rows
+
+def alert_already_sent(user_id, match_id):
+    conn = sqlite3.connect("matchpulse.db")
+    cursor = conn.cursor()
+
+    cursor.execute(
+        '''
+        SELECT 1
+        FROM sent_alerts
+        WHERE user_id = ? AND match_id = ?
+        ''',
+        (user_id, match_id)
+    )
+
+    exists = cursor.fetchone() is not None
+
+    conn.close()
+    return exists
+
+
+def mark_alert_sent(user_id, match_id):
+    conn = sqlite3.connect("matchpulse.db")
+    cursor = conn.cursor()
+
+    cursor.execute(
+        '''
+        INSERT OR IGNORE INTO sent_alerts
+        (user_id, match_id)
+        VALUES (?, ?)
+        ''',
+        (user_id, match_id)
+    )
+
+    conn.commit()
+    conn.close()
+
+
+def fulltime_alert_sent(user_id, match_id):
+    conn = sqlite3.connect("matchpulse.db")
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT 1
+        FROM fulltime_alerts
+        WHERE user_id = ? AND match_id = ?
+        """,
+        (user_id, match_id)
+    )
+
+    exists = cursor.fetchone() is not None
+
+    conn.close()
+    return exists
+
+
+def mark_fulltime_alert_sent(user_id, match_id):
+    conn = sqlite3.connect("matchpulse.db")
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        INSERT OR IGNORE INTO fulltime_alerts
+        (user_id, match_id)
+        VALUES (?, ?)
+        """,
+        (user_id, match_id)
+    )
+
+    conn.commit()
+    conn.close()
