@@ -109,6 +109,7 @@ def build_unfollow_keyboard(followed, selected):
     return keyboard
 
 async def alerts_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["in_alerts"] = True
     user_id = update.effective_user.id
     followed = get_followed_teams(user_id)
     context.user_data["follow_queue"] = []
@@ -153,10 +154,14 @@ async def search_team(update: Update, context: ContextTypes.DEFAULT_TYPE):
             matches = [t for t in WC_TEAMS if t.lower().startswith(query)]
 
         if not matches:
+            keyboard = [[InlineKeyboardButton("✅ Done", callback_data="alerts_done")]]
             await update.message.reply_text(
-                "❌ No teams found. Try again:\n"
-                "Example: bra, eng, por"
-            )
+        "❌ No teams found.\n\n"
+        "⚽ Type a team name to search.\n"
+        "Example: bra, eng, Mexico\n\n"
+        "Or tap Done to exit alerts.",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+             )
             return SEARCH
 
         context.user_data["search_results"] = matches
@@ -190,6 +195,7 @@ async def alerts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return SEARCH
 
     if query.data == "alerts_done":
+        context.user_data["in_alerts"] = False
         followed = get_followed_teams(user_id)
         if followed:
             teams_list = "\n".join([f"• {t}" for t in followed])
@@ -335,6 +341,7 @@ async def alerts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return CONFIRM
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["in_alerts"] = False
     await update.message.reply_text("Alerts setup cancelled.")
     return ConversationHandler.END
 
@@ -356,5 +363,6 @@ def get_alerts_handler():
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         per_message=False,
+        block=True
     )
 

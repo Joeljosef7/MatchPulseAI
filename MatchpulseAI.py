@@ -105,6 +105,10 @@ def ask_groq(prompt):
         return None
 
 async def ai_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    print(f"INCOMING MESSAGE: {update.message.text}")
+    if context.user_data.get("in_alerts"):
+        return
+
     user_message = update.message.text.strip()
     text = user_message.lower()
 
