@@ -201,6 +201,47 @@ Keep it under 200 words."""
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     add_user(user.id, user.username, user.first_name)
+
+    args = context.args
+
+    if args:
+        deep_link = args[0].lower()
+
+        if deep_link == "xg":
+            await update.message.reply_text(
+                "📊 *What is xG?*\n\n"
+                "xG (Expected Goals) measures the quality of a scoring chance. "
+                "A higher xG means a shot is more likely to result in a goal.\n\n"
+                "💬 Ask me more football questions below!",
+                parse_mode="Markdown"
+            )
+            return
+
+        elif deep_link == "goat":
+            await context.bot.send_chat_action(
+                chat_id=update.effective_chat.id,
+                action=ChatAction.TYPING
+            )
+            response = ask_groq("Ronaldo vs Messi comparison under 120 words")
+            await update.message.reply_text(
+                f"🐐 *GOAT Debate:*\n\n{response}",
+                parse_mode="Markdown"
+            )
+            return
+
+        elif deep_link == "fixtures":
+            await fixtures(update, context)
+            return
+
+        elif deep_link == "standings":
+            await standings(update, context)
+            return
+
+        elif deep_link == "alerts":
+            from alerts import alerts_start
+            await alerts_start(update, context)
+            return
+
     await update.message.reply_text(
         f"👋 Welcome {user.first_name} to MatchPulse AI!\n\n"
         "⚽ Your FIFA World Cup 2026 companion.\n\n"
@@ -214,7 +255,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "💬 Just type any football question and I'll answer!\n\n"
         "Let's get started! Use /alerts to follow your teams 🏆"
     )
-
 
 async def fixtures(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = datetime.now(timezone.utc)
