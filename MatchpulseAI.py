@@ -637,7 +637,7 @@ def main():
     app.add_handler(CommandHandler("myscore", myscore))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CallbackQueryHandler(standings_callback), group=1)
-app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CommandHandler("stats", stats))
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat_handler),
         group=2
