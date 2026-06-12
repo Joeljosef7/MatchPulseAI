@@ -1,34 +1,15 @@
 import os
 import logging
 import requests
-
 from dotenv import load_dotenv
-
-from database import (
-    get_all_follows,
-    fulltime_alert_sent,
-    mark_fulltime_alert_sent
-)
+from database import get_all_follows, fulltime_alert_sent, mark_fulltime_alert_sent
+from constants import FLAGS
 
 load_dotenv()
 
 FOOTBALL_API_KEY = os.environ.get("FOOTBALL_API_KEY")
 FOOTBALL_API_URL = "https://api.football-data.org/v4/"
 
-
-FLAGS = {
-    "Argentina": "🇦🇷",
-    "Portugal": "🇵🇹",
-    "Brazil": "🇧🇷",
-    "England": "🏴",
-    "France": "🇫🇷",
-    "Germany": "🇩🇪",
-    "Spain": "🇪🇸",
-    "United States": "🇺🇸",
-    "Mexico": "🇲🇽",
-    "Canada": "🇨🇦",
-    "South Africa": "🇿🇦",
-}
 
 async def check_fulltime_matches(context):
     try:

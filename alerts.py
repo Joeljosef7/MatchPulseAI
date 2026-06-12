@@ -8,63 +8,11 @@ from telegram.ext import (
     filters
 )
 from database import follow_team, unfollow_team, get_followed_teams
+from constants import FLAGS, WC_TEAMS, TEAM_ACRONYMS
 
 SEARCH, CONFIRM, UNFOLLOW_SELECT = range(3)
 
-WC_TEAMS = [
-"Algeria", "Argentina", "Australia", "Austria", "Belgium", "Bosnia-Herzegovina", "Brazil", "Canada", "Cape Verde Islands", "Colombia", "Congo DR", "Croatia", "Curaçao", "Czechia", "Ecuador", "Egypt", "England", "France", "Germany", "Ghana", "Haiti", "Iran", "Iraq", "Ivory Coast", "Japan", "Jordan", "Mexico", "Morocco", "Netherlands", "New Zealand", "Norway", "Panama", "Paraguay", "Portugal", "Qatar", "Saudi Arabia", "Scotland", "Senegal", "South Africa", "South Korea", "Spain", "Sweden", "Switzerland", "Tunisia", "Turkey", "United States", "Uruguay", "Uzbekistan"
-]
 
-TEAM_ACRONYMS = {
-    "alg": "Algeria",
-    "arg": "Argentina",
-    "aus": "Australia",
-    "aut": "Austria",
-    "bel": "Belgium",
-    "bih": "Bosnia-Herzegovina",
-    "bra": "Brazil",
-    "can": "Canada",
-    "cpv": "Cape Verde Islands",
-    "col": "Colombia",
-    "cod": "Congo DR",
-    "cro": "Croatia",
-    "cuw": "Curaçao",
-    "cze": "Czechia",
-    "ecu": "Ecuador",
-    "egy": "Egypt",
-    "eng": "England",
-    "fra": "France",
-    "ger": "Germany",
-    "gha": "Ghana",
-    "hai": "Haiti",
-    "irn": "Iran",
-    "irq": "Iraq",
-    "civ": "Ivory Coast",
-    "jpn": "Japan",
-    "jor": "Jordan",
-    "mex": "Mexico",
-    "mar": "Morocco",
-    "ned": "Netherlands",
-    "nzl": "New Zealand",
-    "nor": "Norway",
-    "pan": "Panama",
-    "par": "Paraguay",
-    "por": "Portugal",
-    "qat": "Qatar",
-    "ksa": "Saudi Arabia",
-    "sco": "Scotland",
-    "sen": "Senegal",
-    "rsa": "South Africa",
-    "kor": "South Korea",
-    "esp": "Spain",
-    "swe": "Sweden",
-    "sui": "Switzerland",
-    "tun": "Tunisia",
-    "tur": "Turkey",
-    "usa": "United States",
-    "uru": "Uruguay",
-    "uzb": "Uzbekistan"
-}
 
 def build_follow_keyboard(matches, selected):
     keyboard = []

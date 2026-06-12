@@ -1,71 +1,15 @@
 import os
 import requests
 import logging
-
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
-
-from database import (
-    get_all_follows,
-    alert_already_sent,
-    mark_alert_sent
-)
+from database import get_all_follows, alert_already_sent, mark_alert_sent
+from constants import FLAGS
 
 load_dotenv()
 
 FOOTBALL_API_KEY = os.environ.get("FOOTBALL_API_KEY")
 FOOTBALL_API_URL = "https://api.football-data.org/v4/"
-
-FLAGS = {
-    "Algeria": "🇩🇿",
-    "Argentina": "🇦🇷",
-    "Australia": "🇦🇺",
-    "Austria": "🇦🇹",
-    "Belgium": "🇧🇪",
-    "Bosnia-Herzegovina": "🇧🇦",
-    "Brazil": "🇧🇷",
-    "Canada": "🇨🇦",
-    "Cape Verde Islands": "🇨🇻",
-    "Colombia": "🇨🇴",
-    "Congo DR": "🇨🇩",
-    "Croatia": "🇭🇷",
-    "Curaçao": "🇨🇼",
-    "Czechia": "🇨🇿",
-    "Ecuador": "🇪🇨",
-    "Egypt": "🇪🇬",
-    "England": "🏴",
-    "France": "🇫🇷",
-    "Germany": "🇩🇪",
-    "Ghana": "🇬🇭",
-    "Haiti": "🇭🇹",
-    "Iran": "🇮🇷",
-    "Iraq": "🇮🇶",
-    "Ivory Coast": "🇨🇮",
-    "Japan": "🇯🇵",
-    "Jordan": "🇯🇴",
-    "Mexico": "🇲🇽",
-    "Morocco": "🇲🇦",
-    "Netherlands": "🇳🇱",
-    "New Zealand": "🇳🇿",
-    "Norway": "🇳🇴",
-    "Panama": "🇵🇦",
-    "Paraguay": "🇵🇾",
-    "Portugal": "🇵🇹",
-    "Qatar": "🇶🇦",
-    "Saudi Arabia": "🇸🇦",
-    "Scotland": "🏴",
-    "Senegal": "🇸🇳",
-    "South Africa": "🇿🇦",
-    "South Korea": "🇰🇷",
-    "Spain": "🇪🇸",
-    "Sweden": "🇸🇪",
-    "Switzerland": "🇨🇭",
-    "Tunisia": "🇹🇳",
-    "Turkey": "🇹🇷",
-    "United States": "🇺🇸",
-    "Uruguay": "🇺🇾",
-    "Uzbekistan": "🇺🇿"
-}
 
 
 async def check_upcoming_matches(context):
