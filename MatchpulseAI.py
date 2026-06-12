@@ -27,7 +27,7 @@ FOOTBALL_API_KEY = os.environ.get("FOOTBALL_API_KEY", "your_key_here")
 
 FOOTBALL_API_URL = "https://api.football-data.org/v4/"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
+CHANNEL_ID = os.environ.get("CHANNEL_ID", "0")
 
 if BOT_TOKEN == "your_token_here":
     print("❌ WARNING: BOT_TOKEN not set!")
@@ -658,6 +658,31 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🏆 *Top 5 followed teams:*\n{top_teams_text}",
         parse_mode="Markdown"
     )
+async def announce(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    if user_id != ADMIN_ID:
+        return
+    
+    if not context.args:
+        await update.message.reply_text(
+            "Usage: /announce Your message here\n\n"
+            "Example: /announce ⚽ Argentina vs Brazil kicks off in 1 hour!"
+        )
+        return
+    
+    message = " ".join(context.args)
+    
+    try:
+        await context.bot.send_message(
+            chat_id=CHANNEL_ID,
+            text=message,
+            parse_mode="Markdown"
+        )
+        await update.message.reply_text("✅ Posted to channel!")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Failed to post: {e}")
+
 
 def main():
     init_db()
@@ -678,6 +703,7 @@ def main():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CallbackQueryHandler(standings_callback), group=1)
     app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CommandHandler("announce", announce))
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat_handler),
         group=2
