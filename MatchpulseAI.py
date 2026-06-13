@@ -13,7 +13,7 @@ from telegram.ext import (
     filters
 )
 from telegram.constants import ChatAction
-from database import init_db, add_user, get_followed_teams
+from database import init_db, add_user, get_followed_teams, get_stats, log_activity
 from alerts import get_alerts_handler
 from alerts_scheduler import check_upcoming_matches
 from fulltime_scheduler import check_fulltime_matches
@@ -98,6 +98,7 @@ def ask_groq(prompt):
         return None
 
 async def ai_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    log_activity(update.effective_user.id, "ai_question")
     if context.user_data.get("in_alerts"):
         return
 
@@ -191,6 +192,8 @@ Keep it under 200 words."""
         )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    log_activity(user.id, "start")
+
     user = update.effective_user
     add_user(user.id, user.username, user.first_name)
 
@@ -234,21 +237,31 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await alerts_start(update, context)
             return
 
+    keyboard = [[
+    InlineKeyboardButton(
+        "📢 Share MatchPulse AI",
+        url="https://t.me/share/url?url=https://t.me/MatchPulseAIBot&text=⚽ Follow the FIFA World Cup 2026 with AI-powered alerts, live scores and match previews!"
+     )
+     ]]
+
     await update.message.reply_text(
-        f"👋 Welcome {user.first_name} to MatchPulse AI!\n\n"
-        "⚽ Your FIFA World Cup 2026 companion.\n\n"
-        "Here's what I can do:\n"
-        "📅 /fixtures - Today's matches\n"
-        "📊 /standings - Group standings\n"
-        "🔴 /score - Live scores\n"
-        "⭐ /myscore - Your teams live scores\n"
-        "🔔 /alerts - Manage followed teams\n"
-        "❓ /help - All commands\n\n"
-        "💬 Just type any football question and I'll answer!\n\n"
-        "Let's get started! Use /alerts to follow your teams 🏆"
+    f"👋 Welcome {user.first_name} to MatchPulse AI!\n\n"
+    "⚽ Your FIFA World Cup 2026 companion.\n\n"
+    "Here's what I can do:\n"
+    "📅 /fixtures - Today's matches\n"
+    "📊 /standings - Group standings\n"
+    "🔴 /score - Live scores\n"
+    "⭐ /myscore - Your teams live scores\n"
+    "🔔 /alerts - Manage followed teams\n"
+    "❓ /help - All commands\n\n"
+    "💬 Just type any football question and I'll answer!\n\n"
+    "📢 Enjoying MatchPulse AI? Share it with other football fans below.\n\n"
+    "Let's get started! Use /alerts to follow your teams 🏆",
+    reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 async def fixtures(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    log_activity(update.effective_user.id, "fixtures")
     now = datetime.now(timezone.utc)
     today = now.strftime("%Y-%m-%d")
 
@@ -311,6 +324,7 @@ async def fixtures(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ Could not fetch data. Error: {error_code}")
 
 async def standings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    log_activity(update.effective_user.id, "standings") 
     if context.args:
         choice = context.args[0].lower()
         headers = {"X-Auth-Token": FOOTBALL_API_KEY}
@@ -490,6 +504,7 @@ async def standings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await query.edit_message_text("❌ Could not find that group.")
 
 async def score(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    log_activity(update.effective_user.id, "score")
     if context.args:
         team_query = " ".join(context.args).lower()
         await update.message.reply_text(f"🔍 Searching for {team_query}...")
@@ -567,7 +582,9 @@ async def score(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❌ Could not fetch scores. Try again later.")
 
+
 async def myscore(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    log_activity(update.effective_user.id, "myscore")
     user_id = update.effective_user.id
     followed = get_followed_teams(user_id)
     if not followed:
@@ -608,6 +625,7 @@ async def myscore(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message += f"😴 *{team}* — Not playing right now\n\n"
     await update.message.reply_text(message, parse_mode="Markdown")
 
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "❓ *MatchPulse AI — Commands*\n\n"
@@ -636,24 +654,22 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if user_id != ADMIN_ID:
         return
-    conn = __import__('sqlite3').connect("matchpulse.db")
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM users")
-    total_users = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(DISTINCT user_id) FROM followed_teams")
-    active_users = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM followed_teams")
-    total_follows = cursor.fetchone()[0]
-    cursor.execute("SELECT team_name, COUNT(*) as count FROM followed_teams GROUP BY team_name ORDER BY count DESC LIMIT 5")
-    top_teams = cursor.fetchall()
-    conn.close()
-    top_teams_text = "\n".join([f"• {team}: {count}" for team, count in top_teams])
+
+    total_users, dau, new_today, active_users, total_follows, top_teams, top_commands, ai_today = get_stats()
+
+    top_teams_text = "\n".join([f"• {team}: {count}" for team, count in top_teams]) or "None yet"
+    top_commands_text = "\n".join([f"• {cmd}: {count}" for cmd, count in top_commands]) or "None yet"
+
     await update.message.reply_text(
         f"📊 *MatchPulse AI Stats*\n\n"
         f"👥 Total users: {total_users}\n"
-        f"⭐ Users following teams: {active_users}\n"
-        f"🔔 Total team follows: {total_follows}\n\n"
-        f"🏆 *Top 5 followed teams:*\n{top_teams_text}",
+        f"🆕 New today: {new_today}\n"
+        f"📱 Active today (DAU): {dau}\n\n"
+        f"⭐ Following teams: {active_users}\n"
+        f"🔔 Total follows: {total_follows}\n\n"
+        f"🤖 AI questions today: {ai_today}\n\n"
+        f"🏆 *Top followed teams:*\n{top_teams_text}\n\n"
+        f"📈 *Top commands today:*\n{top_commands_text}",
         parse_mode="Markdown"
     )
 
