@@ -7,7 +7,7 @@ from telegram.ext import (
     CallbackQueryHandler,
     filters
 )
-from database import follow_team, unfollow_team, get_followed_teams
+from database import follow_team, unfollow_team, get_followed_teams, add_user
 from constants import FLAGS, WC_TEAMS, TEAM_ACRONYMS
 
 SEARCH, CONFIRM, UNFOLLOW_SELECT = range(3)
@@ -58,8 +58,9 @@ def build_unfollow_keyboard(followed, selected):
 
 async def alerts_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["in_alerts"] = True
-    user_id = update.effective_user.id
-    followed = get_followed_teams(user_id)
+    user = update.effective_user
+    add_user(user.id, user.username, user.first_name)
+    followed = get_followed_teams(user.id)
     context.user_data["follow_queue"] = []
     context.user_data["unfollow_queue"] = []
     context.user_data["search_results"] = []

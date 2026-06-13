@@ -88,6 +88,13 @@ def follow_team(user_id, team_name):
     team_name = team_name.strip()
     conn = get_conn()
     cursor = conn.cursor()
+
+    cursor.execute('''
+        INSERT INTO users (user_id, username, first_name, joined_date)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (user_id) DO NOTHING
+    ''', (user_id, None, None, datetime.now().strftime("%Y-%m-%d")))
+
     cursor.execute('''
         SELECT 1 FROM followed_teams
         WHERE user_id = %s AND team_name = %s
