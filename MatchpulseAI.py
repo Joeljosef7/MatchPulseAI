@@ -192,10 +192,9 @@ Keep it under 200 words."""
         )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    log_activity(user.id, "start")
-
     user = update.effective_user
     add_user(user.id, user.username, user.first_name)
+    log_activity(user.id, "start")
 
     args = context.args
 
@@ -255,8 +254,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     "🔔 /alerts - Manage followed teams\n"
     "❓ /help - All commands\n\n"
     "💬 Just type any football question and I'll answer!\n\n"
-    "📢 Enjoying MatchPulse AI? Share it with other football fans below.\n\n"
-    "Let's get started! Use /alerts to follow your teams 🏆",
+    "Let's get started! Use /alerts to follow your teams 🏆\n\n"
+    "📢 Enjoying MatchPulse AI? Share it with other football fans below.",
     reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -311,6 +310,24 @@ async def fixtures(update: Update, context: ContextTypes.DEFAULT_TYPE):
             home_flag = FLAGS.get(home, "🏳️")
             away_flag = FLAGS.get(away, "🏳️")
             message += f"{home_flag} *{home}* vs *{away}* {away_flag}\n🕐 {time} UTC\n\n"
+        for match in target_matches:
+            home = match["homeTeam"]["name"]
+            away = match["awayTeam"]["name"]
+            time = match["utcDate"][11:16]
+            status = match["status"]
+            home_flag = FLAGS.get(home, "🏳️")
+            away_flag = FLAGS.get(away, "🏳️")
+
+            if status == "FINISHED":
+                hs = match["score"]["fullTime"]["home"]
+                aws = match["score"]["fullTime"]["away"]
+                message += f"✅ {home_flag} *{home}* {hs} - {aws} *{away}* {away_flag}\n\n"
+            elif status in ["IN_PLAY", "PAUSED"]:
+                hs = match["score"]["fullTime"]["home"] or 0
+                aws = match["score"]["fullTime"]["away"] or 0
+                message += f"🔴 {home_flag} *{home}* {hs} - {aws} *{away}* {away_flag} *(LIVE)*\n\n"
+            else:
+                message += f"⏰ {home_flag} *{home}* vs *{away}* {away_flag}\n🕐 {time} UTC\n\n"
 
         await update.message.reply_text(message, parse_mode="Markdown")
 
