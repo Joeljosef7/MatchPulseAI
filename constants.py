@@ -101,3 +101,13 @@ TEAM_ACRONYMS = {
     "uru": "Uruguay",
     "uzb": "Uzbekistan"
 }
+
+FOOTBALL_KEYWORDS = [
+    "football", "soccer", "world cup", "goal", "offside",
+    "match", "player", "team", "coach", "fifa", "mbappe",
+    "messi", "ronaldo", "england", "france", "brazil",
+    "argentina", "spain", "germany", "vs", "preview",
+    "penalty", "striker", "midfielder", "defender", "keeper",
+    "tournament", "league", "cup", "score", "tactics"
+]
+

@@ -18,7 +18,7 @@ from alerts import get_alerts_handler
 from alerts_scheduler import check_upcoming_matches
 from fulltime_scheduler import check_fulltime_matches
 from datetime import datetime, timezone, timedelta
-from constants import FLAGS
+from constants import FLAGS, FOOTBALL_KEYWORDS
 
 load_dotenv()
 
@@ -44,14 +44,6 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-FOOTBALL_KEYWORDS = [
-    "football", "soccer", "world cup", "goal", "offside",
-    "match", "player", "team", "coach", "fifa", "mbappe",
-    "messi", "ronaldo", "england", "france", "brazil",
-    "argentina", "spain", "germany", "vs", "preview",
-    "penalty", "striker", "midfielder", "defender", "keeper",
-    "tournament", "league", "cup", "score", "tactics"
-]
 
 def ask_groq(prompt):
     print("ask_groq called")
@@ -93,9 +85,45 @@ def ask_groq(prompt):
             return None
         data = response.json()
         return data["choices"][0]["message"]["content"]
-    except Exception as e:
-        print("Groq error:", e)
-        return None
+    except Exception:
+        return "FIFA World Cup 2026 is currently underway.\n"
+
+def get_wc_context():
+    try:
+        headers = {"X-Auth-Token": FOOTBALL_API_KEY}
+        finished = requests.get(
+            FOOTBALL_API_URL + "competitions/WC/matches?status=FINISHED",
+            headers=headers, timeout=10
+        ).json().get("matches", [])
+
+        scheduled = requests.get(
+            FOOTBALL_API_URL + "competitions/WC/matches?status=TIMED",
+            headers=headers, timeout=10
+        ).json().get("matches", [])
+
+        context = "FIFA World Cup 2026 — Real-time data:\n\n"
+
+        if finished:
+            context += "Recent Results:\n"
+            for match in finished[-8:]:
+                home = match["homeTeam"]["name"]
+                away = match["awayTeam"]["name"]
+                hs = match["score"]["fullTime"]["home"]
+                aws = match["score"]["fullTime"]["away"]
+                date = match["utcDate"][:10]
+                context += f"• {home} {hs}-{aws} {away} ({date})\n"
+
+        if scheduled:
+            context += "\nUpcoming Matches:\n"
+            for match in scheduled[:5]:
+                home = match["homeTeam"]["name"]
+                away = match["awayTeam"]["name"]
+                date = match["utcDate"][:10]
+                time = match["utcDate"][11:16]
+                context += f"• {home} vs {away} — {date} {time} UTC\n"
+        return context
+    except Exception:
+        return "FIFA World Cup 2026 is currently underway.\n"
 
 async def ai_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log_activity(update.effective_user.id, "ai_question")
@@ -116,8 +144,11 @@ async def ai_chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    wc_context = get_wc_context()
     if "preview" in text:
-        prompt = f"""You are MatchPulse AI, a football analyst focused on the FIFA World Cup.
+        prompt = f"""{wc_context}
+
+You are MatchPulse AI, a football analyst focused on the FIFA World Cup.
 Be concise, engaging, and accurate. Never invent scores or statistics.
 
 Create a match preview for: {user_message}
@@ -132,12 +163,11 @@ Include:
 Keep it under 250 words."""
 
     elif " vs " in text:
-        prompt = f"""
+        prompt = f"""{wc_context}
+
 You are MatchPulse AI.
 
-Compare:
-
-{user_message}
+Compare: {user_message}
 
 Rules:
 - Stay neutral.
@@ -146,33 +176,31 @@ Rules:
 - If the comparison is subjective, say that opinions differ.
 
 Format:
-
 ⚽ Playing Style
 ⚽ Strengths
 ⚽ Weaknesses
 ⚽ Current Influence
 ⚽ Final Verdict
 
-Keep under 150 words.
-"""
+Keep under 150 words."""
 
     elif any(text.startswith(w) for w in ["what is", "what are", "how does", "how do", "why", "explain", "who is", "who are"]):
-        prompt = f"""
+        prompt = f"""{wc_context}
+
 You are MatchPulse AI.
 
-Explain:
-
-{user_message}
+Explain: {user_message}
 
 Rules:
 - No greetings.
 - No introductions.
 - Use simple football language.
-- Keep under 120 words.
-"""
+- Keep under 120 words."""
 
     else:
-        prompt = f"""You are MatchPulse AI, a football analyst focused on the FIFA World Cup 2026.
+        prompt = f"""{wc_context}
+
+You are MatchPulse AI, a football analyst focused on the FIFA World Cup 2026.
 Answer this football question concisely: {user_message}
 
 Keep it under 200 words."""
