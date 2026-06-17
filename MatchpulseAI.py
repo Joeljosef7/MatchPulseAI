@@ -604,13 +604,22 @@ async def score(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 status = match.get("status", "LIVE")
 
+                status_map = {
+                    "IN_PLAY": "🔴 Live",
+                    "PAUSED": "⏸️ Half Time",
+                    "FINISHED": "✅ Full Time",
+                    "SCHEDULED": "📅 Upcoming"
+                }
+
+                status_text = status_map.get(status, status)
+
                 home_flag = FLAGS.get(home, "🏳️")
                 away_flag = FLAGS.get(away, "🏳️")
 
                 await update.message.reply_text(
                     f"🔴 Live Score\n\n"
                     f"{home_flag} {home} {home_score} - {away_score} {away} {away_flag}\n"
-                    f"⏱ Status: {status}"
+                    f"⏱ {status_text}"
                 )
 
         if not found:
@@ -735,7 +744,7 @@ async def myscore(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 message += (
                     f"🔴 {home_flag} {home} {home_score} - {away_score} {away} {away_flag}\n"
-                    f"⏱ Status: {status}\n\n"
+                    f"⏱ Status: {status_text}\n\n"
                 )
 
         if not team_found:
