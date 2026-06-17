@@ -550,125 +550,200 @@ async def standings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def score(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log_activity(update.effective_user.id, "score")
-    if context.args:
-        team_query = " ".join(context.args).lower()
-        await update.message.reply_text(f"🔍 Searching for {team_query}...")
-        headers = {"X-Auth-Token": FOOTBALL_API_KEY}
-        response = requests.get(
-            FOOTBALL_API_URL + "competitions/WC/matches?status=IN_PLAY,PAUSED,LIVE",
-            headers=headers
-        )
-        if response.status_code == 200:
-            data = response.json()
-            matches = data["matches"]
-            found = False
-            for match in matches:
-                home = match["homeTeam"]["name"]
-                away = match["awayTeam"]["name"]
-                if team_query in home.lower() or team_query in away.lower():
-                    found = True
-                    home_score = match["score"]["fullTime"]["home"] or match["score"]["halfTime"]["home"] or 0
-                    away_score = match["score"]["fullTime"]["away"] or match["score"]["halfTime"]["away"] or 0
-                    minute = match.get("status", {}).get("elapsed", "?")
-                    home_flag = FLAGS.get(home, "🏳️")
-                    away_flag = FLAGS.get(away, "🏳️")
-                    await update.message.reply_text(
-                        f"🔴 *Live Score:*\n\n"
-                        f"{home_flag} *{home}* {home_score} - {away_score} *{away}* {away_flag}\n"
-                        f"⏱ Minute: {minute}",
-                        parse_mode="Markdown"
-                    )
-            if not found:
-                await update.message.reply_text(
-                    f"😴 {team_query.title()} are not playing right now.\n\n"
-                    "Use /fixtures to see their next match."
-                )
-        else:
-            await update.message.reply_text("❌ Could not fetch scores. Try again later.")
-        return
+
     headers = {"X-Auth-Token": FOOTBALL_API_KEY}
-    response = requests.get(
-        FOOTBALL_API_URL + "competitions/WC/matches?status=IN_PLAY,PAUSED,LIVE",
-        headers=headers
-    )
-    if response.status_code == 200:
-        data = response.json()
-        matches = data["matches"]
-        if not matches:
+
+    try:
+        response = requests.get(
+            FOOTBALL_API_URL + "competitions/WC/matches?status=IN_PLAY",
+            headers=headers,
+            timeout=15
+        )
+
+        if response.status_code != 200:
             await update.message.reply_text(
-                "😴 No live matches right now.\n\n"
-                "Use /fixtures to see upcoming matches."
+                "❌ Could not fetch scores. Try again later."
             )
             return
-        message = "🔴 *All Live Scores:*\n\n"
+
+        matches = response.json().get("matches", [])
+
+    except Exception:
+        await update.message.reply_text(
+            "❌ Could not fetch scores. Try again later."
+        )
+        return
+
+    if context.args:
+        team_query = " ".join(context.args).lower()
+
+        await update.message.reply_text(
+            f"🔍 Searching for {team_query.title()}..."
+        )
+
+        found = False
+
         for match in matches:
             home = match["homeTeam"]["name"]
             away = match["awayTeam"]["name"]
-            home_score = match["score"]["fullTime"]["home"] or match["score"]["halfTime"]["home"] or 0
-            away_score = match["score"]["fullTime"]["away"] or match["score"]["halfTime"]["away"] or 0
-            minute = match.get("status", {}).get("elapsed", "?")
-            home_flag = FLAGS.get(home, "🏳️")
-            away_flag = FLAGS.get(away, "🏳️")
-            message += (
-                f"{home_flag} *{home}* {home_score} - {away_score} *{away}* {away_flag}\n"
-                f"⏱ Minute: {minute}\n\n"
-            )
-        keyboard = [
-            [
-                InlineKeyboardButton("🔍 Search by Team", callback_data="score_search"),
-                InlineKeyboardButton("🔄 Refresh", callback_data="score_refresh"),
-            ]
-        ]
-        await update.message.reply_text(
-            message,
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-    else:
-        await update.message.reply_text("❌ Could not fetch scores. Try again later.")
 
+            if team_query in home.lower() or team_query in away.lower():
+                found = True
+
+                home_score = (
+                    match["score"]["fullTime"].get("home")
+                    or match["score"]["halfTime"].get("home")
+                    or 0
+                )
+
+                away_score = (
+                    match["score"]["fullTime"].get("away")
+                    or match["score"]["halfTime"].get("away")
+                    or 0
+                )
+
+                status = match.get("status", "LIVE")
+
+                home_flag = FLAGS.get(home, "🏳️")
+                away_flag = FLAGS.get(away, "🏳️")
+
+                await update.message.reply_text(
+                    f"🔴 Live Score\n\n"
+                    f"{home_flag} {home} {home_score} - {away_score} {away} {away_flag}\n"
+                    f"⏱ Status: {status}"
+                )
+
+        if not found:
+            await update.message.reply_text(
+                f"😴 {team_query.title()} are not playing right now.\n\n"
+                "Use /fixtures to see their next match."
+            )
+
+        return
+
+    if not matches:
+        await update.message.reply_text(
+            "😴 No live matches right now.\n\n"
+            "Use /fixtures to see upcoming matches."
+        )
+        return
+
+    message = "🔴 All Live Scores\n\n"
+
+    for match in matches:
+        home = match["homeTeam"]["name"]
+        away = match["awayTeam"]["name"]
+
+        home_score = (
+            match["score"]["fullTime"].get("home")
+            or match["score"]["halfTime"].get("home")
+            or 0
+        )
+
+        away_score = (
+            match["score"]["fullTime"].get("away")
+            or match["score"]["halfTime"].get("away")
+            or 0
+        )
+
+        status = match.get("status", "LIVE")
+
+        home_flag = FLAGS.get(home, "🏳️")
+        away_flag = FLAGS.get(away, "🏳️")
+
+        message += (
+            f"{home_flag} {home} {home_score} - {away_score} {away} {away_flag}\n"
+            f"⏱ Status: {status}\n\n"
+        )
+
+    keyboard = [[
+        InlineKeyboardButton("🔍 Search by Team", callback_data="score_search"),
+        InlineKeyboardButton("🔄 Refresh", callback_data="score_refresh")
+    ]]
+
+    await update.message.reply_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 async def myscore(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log_activity(update.effective_user.id, "myscore")
+
     user_id = update.effective_user.id
     followed = get_followed_teams(user_id)
+
     if not followed:
         await update.message.reply_text(
             "⭐ You're not following any teams yet.\n\n"
             "Use /alerts to follow your teams first."
         )
         return
+
     await update.message.reply_text("🔍 Checking your teams...")
+
     headers = {"X-Auth-Token": FOOTBALL_API_KEY}
-    response = requests.get(
-        FOOTBALL_API_URL + "competitions/WC/matches?status=IN_PLAY,PAUSED,LIVE",
-        headers=headers
-    )
-    if response.status_code != 200:
-        await update.message.reply_text("❌ Could not fetch scores. Try again later.")
+
+    try:
+        response = requests.get(
+            FOOTBALL_API_URL + "competitions/WC/matches?status=IN_PLAY",
+            headers=headers,
+            timeout=15
+        )
+
+        if response.status_code != 200:
+            await update.message.reply_text(
+                "❌ Could not fetch scores. Try again later."
+            )
+            return
+
+        matches = response.json().get("matches", [])
+
+    except Exception:
+        await update.message.reply_text(
+            "❌ Could not fetch scores. Try again later."
+        )
         return
-    data = response.json()
-    matches = data["matches"]
-    message = "⭐ *Your Teams Live Scores:*\n\n"
+
+    message = "⭐ Your Teams Live Scores\n\n"
+
     for team in followed:
         team_found = False
+
         for match in matches:
             home = match["homeTeam"]["name"]
             away = match["awayTeam"]["name"]
+
             if team.lower() in home.lower() or team.lower() in away.lower():
                 team_found = True
-                home_score = match["score"]["fullTime"]["home"] or match["score"]["halfTime"]["home"] or 0
-                away_score = match["score"]["fullTime"]["away"] or match["score"]["halfTime"]["away"] or 0
-                minute = match.get("status", {}).get("elapsed", "?")
+
+                home_score = (
+                    match["score"]["fullTime"].get("home")
+                    or match["score"]["halfTime"].get("home")
+                    or 0
+                )
+
+                away_score = (
+                    match["score"]["fullTime"].get("away")
+                    or match["score"]["halfTime"].get("away")
+                    or 0
+                )
+
+                status = match.get("status", "LIVE")
+
                 home_flag = FLAGS.get(home, "🏳️")
                 away_flag = FLAGS.get(away, "🏳️")
+
                 message += (
-                    f"🔴 {home_flag} *{home}* {home_score} - {away_score} *{away}* {away_flag}\n"
-                    f"⏱ Minute: {minute}\n\n"
+                    f"🔴 {home_flag} {home} {home_score} - {away_score} {away} {away_flag}\n"
+                    f"⏱ Status: {status}\n\n"
                 )
+
         if not team_found:
-            message += f"😴 *{team}* — Not playing right now\n\n"
-    await update.message.reply_text(message, parse_mode="Markdown")
+            message += (
+                f"😴 {team} — Not playing right now\n\n"
+            )
+
+    await update.message.reply_text(message)
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
