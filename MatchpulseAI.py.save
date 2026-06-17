@@ -567,9 +567,9 @@ async def score(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 away = match["awayTeam"]["name"]
                 if team_query in home.lower() or team_query in away.lower():
                     found = True
-                    home_score = match["score"]["fullTime"]["home"] or match["score"]["halfTime"]["home"] or 0
-                    away_score = match["score"]["fullTime"]["away"] or match["score"]["halfTime"]["away"] or 0
-                    minute = match.get("status", {}).get("elapsed", "?")
+                    away_score = match["score"]["fullTime"]["away"]home_score = match["score"]["fullTime"]["home"]
+                    away_score = match["score"]["fullTime"]["away"]
+                    minute = match.get("minute") or match.get("currentPeriod", "?")
                     home_flag = FLAGS.get(home, "🏳️")
                     away_flag = FLAGS.get(away, "🏳️")
                     await update.message.reply_text(
@@ -604,9 +604,9 @@ async def score(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for match in matches:
             home = match["homeTeam"]["name"]
             away = match["awayTeam"]["name"]
-            home_score = match["score"]["fullTime"]["home"] or match["score"]["halfTime"]["home"] or 0
-            away_score = match["score"]["fullTime"]["away"] or match["score"]["halfTime"]["away"] or 0
-            minute = match.get("status", {}).get("elapsed", "?")
+            home_score = match["score"]["fullTime"]["home"]
+            away_score = match["score"]["fullTime"]["away"]
+            minute = match.get("minute") or match.get("currentPeriod", "?")
             home_flag = FLAGS.get(home, "🏳️")
             away_flag = FLAGS.get(away, "🏳️")
             message += (
@@ -657,9 +657,9 @@ async def myscore(update: Update, context: ContextTypes.DEFAULT_TYPE):
             away = match["awayTeam"]["name"]
             if team.lower() in home.lower() or team.lower() in away.lower():
                 team_found = True
-                home_score = match["score"]["fullTime"]["home"] or match["score"]["halfTime"]["home"] or 0
-                away_score = match["score"]["fullTime"]["away"] or match["score"]["halfTime"]["away"] or 0
-                minute = match.get("status", {}).get("elapsed", "?")
+                home_score = match["score"]["fullTime"]["home"]
+                away_score = match["score"]["fullTime"]["away"]
+                minute = match.get("minute") or match.get("currentPeriod", "?")
                 home_flag = FLAGS.get(home, "🏳️")
                 away_flag = FLAGS.get(away, "🏳️")
                 message += (
@@ -669,6 +669,7 @@ async def myscore(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not team_found:
             message += f"😴 *{team}* — Not playing right now\n\n"
     await update.message.reply_text(message, parse_mode="Markdown")
+
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -701,27 +702,21 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     total_users, dau, new_today, active_users, total_follows, top_teams, top_commands, ai_today = get_stats()
 
-    top_teams_text = "\n".join(
-        [f"• {team}: {count}" for team, count in top_teams]
-    ) or "None yet"
+    top_teams_text = "\n".join([f"• {team}: {count}" for team, count in top_teams]) or "None yet"
+    top_commands_text = "\n".join([f"• {cmd}: {count}" for cmd, count in top_commands]) or "None yet"
 
-    top_commands_text = "\n".join(
-        [f"• {cmd}: {count}" for cmd, count in top_commands]
-    ) or "None yet"
-
-    stats_text = (
-        f"📊 MatchPulse AI Stats\n\n"
+    await update.message.reply_text(
+        f"📊 *MatchPulse AI Stats*\n\n"
         f"👥 Total users: {total_users}\n"
         f"🆕 New today: {new_today}\n"
         f"📱 Active today (DAU): {dau}\n\n"
         f"⭐ Following teams: {active_users}\n"
         f"🔔 Total follows: {total_follows}\n\n"
         f"🤖 AI questions today: {ai_today}\n\n"
-        f"🏆 Top followed teams:\n{top_teams_text}\n\n"
-        f"📈 Top commands today:\n{top_commands_text}"
+        f"🏆 *Top followed teams:*\n{top_teams_text}\n\n"
+        f"📈 *Top commands today:*\n{top_commands_text}",
+        parse_mode="Markdown"
     )
-
-    await update.message.reply_text(stats_text)
 
 async def announce(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
