@@ -315,7 +315,10 @@ async def fixtures(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if response.status_code == 200:
         data = response.json()
         matches = data["matches"]
+        print("MATCHES FOUND:", len(matches))
 
+        for match in matches:
+            print(match.get("status"))
         target_matches = [
             m for m in matches
             if m["utcDate"][:10] == target_date
@@ -555,7 +558,7 @@ async def score(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         response = requests.get(
-            FOOTBALL_API_URL + "competitions/WC/matches?status=IN_PLAY",
+            FOOTBALL_API_URL + "competitions/WC/matches?status=IN_PLAY,PAUSED",
             headers=headers,
             timeout=15
         )
@@ -573,6 +576,13 @@ async def score(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "❌ Could not fetch scores. Try again later."
         )
         return
+
+    status_map = {
+        "IN_PLAY": "🔴 Live",
+        "PAUSED": "⏸️ Half Time",
+        "FINISHED": "✅ Full Time",
+        "SCHEDULED": "📅 Upcoming"
+    }
 
     if context.args:
         team_query = " ".join(context.args).lower()
@@ -603,14 +613,6 @@ async def score(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
 
                 status = match.get("status", "LIVE")
-
-                status_map = {
-                    "IN_PLAY": "🔴 Live",
-                    "PAUSED": "⏸️ Half Time",
-                    "FINISHED": "✅ Full Time",
-                    "SCHEDULED": "📅 Upcoming"
-                }
-
                 status_text = status_map.get(status, status)
 
                 home_flag = FLAGS.get(home, "🏳️")
@@ -656,13 +658,14 @@ async def score(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         status = match.get("status", "LIVE")
+        status_text = status_map.get(status, status)
 
         home_flag = FLAGS.get(home, "🏳️")
         away_flag = FLAGS.get(away, "🏳️")
 
         message += (
             f"{home_flag} {home} {home_score} - {away_score} {away} {away_flag}\n"
-            f"⏱ Status: {status}\n\n"
+            f"⏱ {status_text}\n\n"
         )
 
     keyboard = [[
@@ -674,6 +677,7 @@ async def score(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message,
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
+
 
 async def myscore(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log_activity(update.effective_user.id, "myscore")
@@ -694,7 +698,7 @@ async def myscore(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         response = requests.get(
-            FOOTBALL_API_URL + "competitions/WC/matches?status=IN_PLAY",
+            FOOTBALL_API_URL + "competitions/WC/matches?status=IN_PLAY,PAUSED",
             headers=headers,
             timeout=15
         )
@@ -712,6 +716,13 @@ async def myscore(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "❌ Could not fetch scores. Try again later."
         )
         return
+
+    status_map = {
+        "IN_PLAY": "🔴 Live",
+        "PAUSED": "⏸️ Half Time",
+        "FINISHED": "✅ Full Time",
+        "SCHEDULED": "📅 Upcoming"
+    }
 
     message = "⭐ Your Teams Live Scores\n\n"
 
@@ -738,13 +749,14 @@ async def myscore(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
 
                 status = match.get("status", "LIVE")
+                status_text = status_map.get(status, status)
 
                 home_flag = FLAGS.get(home, "🏳️")
                 away_flag = FLAGS.get(away, "🏳️")
 
                 message += (
                     f"🔴 {home_flag} {home} {home_score} - {away_score} {away} {away_flag}\n"
-                    f"⏱ Status: {status_text}\n\n"
+                    f"⏱ {status_text}\n\n"
                 )
 
         if not team_found:
@@ -753,6 +765,7 @@ async def myscore(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
     await update.message.reply_text(message)
+
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -889,7 +902,7 @@ def main():
     app.job_queue.run_repeating(check_fulltime_matches, interval=600, first=20)
     app.job_queue.run_daily(
         post_daily_fixtures,
-        time=datetime.strptime("07:00", "%H:%M").replace(tzinfo=timezone.utc).timetz()
+        time=datetime.strptime("00:00", "%H:%M").replace(tzinfo=timezone.utc).timetz()
     )
     print("✅ MatchPulse AI is running...")
     app.run_polling()
