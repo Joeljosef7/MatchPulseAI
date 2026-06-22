@@ -4,14 +4,7 @@ import logging
 import sys
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-    MessageHandler,
-    filters
-)
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 from telegram.constants import ChatAction
 from database import init_db, add_user, get_followed_teams, get_stats, log_activity
 from alerts import get_alerts_handler
@@ -334,13 +327,6 @@ async def fixtures(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         message = f"📅 *{date_label} World Cup Fixtures ({target_date}):*\n\n"
-        for match in target_matches:
-            home = match["homeTeam"]["name"]
-            away = match["awayTeam"]["name"]
-            time = match["utcDate"][11:16]
-            home_flag = FLAGS.get(home, "🏳️")
-            away_flag = FLAGS.get(away, "🏳️")
-            message += f"{home_flag} *{home}* vs *{away}* {away_flag}\n🕐 {time} UTC\n\n"
         for match in target_matches:
             home = match["homeTeam"]["name"]
             away = match["awayTeam"]["name"]
@@ -874,6 +860,51 @@ async def post_daily_fixtures(context):
     except Exception as e:
         logging.exception(f"Daily fixtures post error: {e}")
 
+async def post_daily_results(context):
+    try:
+        now = datetime.now(timezone.utc)
+        today = now.strftime("%Y-%m-%d")
+        headers = {"X-Auth-Token": FOOTBALL_API_KEY}
+        response = requests.get(
+            FOOTBALL_API_URL + f"competitions/WC/matches?dateFrom={today}&dateTo={today}",
+            headers=headers,
+            timeout=15
+        )
+        if response.status_code != 200:
+            return
+        matches = response.json()["matches"]
+        if not matches:
+            return
+
+        message = f"📊 *Today's World Cup Results ({today}):*\n\n"
+        for match in matches:
+            home = match["homeTeam"]["name"]
+            away = match["awayTeam"]["name"]
+            time = match["utcDate"][11:16]
+            status = match["status"]
+            home_flag = FLAGS.get(home, "🏳️")
+            away_flag = FLAGS.get(away, "🏳️")
+
+            if status == "FINISHED":
+                hs = match["score"]["fullTime"]["home"]
+                aws = match["score"]["fullTime"]["away"]
+                message += f"✅ {home_flag} *{home}* {hs} - {aws} *{away}* {away_flag}\n\n"
+            elif status in ["IN_PLAY", "PAUSED"]:
+                hs = match["score"]["fullTime"]["home"] or 0
+                aws = match["score"]["fullTime"]["away"] or 0
+                message += f"🔴 {home_flag} *{home}* {hs} - {aws} *{away}* {away_flag} *(LIVE)*\n\n"
+            else:
+                message += f"⏰ {home_flag} *{home}* vs *{away}* {away_flag}\n🕐 {time} UTC\n\n"
+
+        message += "📅 See tomorrow's fixtures at midnight on this channel."
+        await context.bot.send_message(
+            chat_id=CHANNEL_ID,
+            text=message,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logging.exception(f"Daily results post error: {e}")
+
 def main():
     init_db()
     app = (
@@ -903,6 +934,10 @@ def main():
     app.job_queue.run_daily(
         post_daily_fixtures,
         time=datetime.strptime("00:00", "%H:%M").replace(tzinfo=timezone.utc).timetz()
+    )
+    app.job_queue.run_daily(
+        post_daily_results,
+        time=datetime.strptime("23:55", "%H:%M").replace(tzinfo=timezone.utc).timetz()
     )
     print("✅ Goalclue is running...")
     app.run_polling()
