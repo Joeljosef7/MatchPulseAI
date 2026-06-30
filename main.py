@@ -4,14 +4,7 @@ import logging
 import sys
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-    MessageHandler,
-    filters
-)
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 from telegram.constants import ChatAction
 from database import init_db, add_user, get_followed_teams, get_stats, log_activity
 from alerts import get_alerts_handler
@@ -184,18 +177,29 @@ Format:
 
 Keep under 150 words."""
 
-    elif any(phrase in text for phrase in ["best player", "best team", "who should win", "who will win", "top scorer", "most goals", "player of the tournament"]):
+    elif any(phrase in text for phrase in ["best player", "top scorer", "most goals", "player of the tournament"]):
+        prompt = f"""You are Goalclue, a confident football pundit covering FIFA World Cup 2026.
+
+Question: {user_message}
+
+Answer like a pundit speaking live on TV. Be direct and opinionated.
+Pick 2 to 3 specific players by name. Explain each one's quality, what makes them dangerous, and why they are standing out at this tournament.
+Do not say it is too early. Do not hedge. Do not mention scorelines or match results.
+Talk about the players themselves: their style, goals, assists, leadership, or impact.
+No greetings. No introductions. Start your answer immediately.
+
+Keep under 120 words."""
+
+    elif any(phrase in text for phrase in ["best team", "who should win", "who will win"]):
         prompt = f"""{wc_context}
 
 You are Goalclue.
 
-Answer this question using your football knowledge: {user_message}
+Answer this question using the match data above plus your football knowledge: {user_message}
 
 Rules:
-- Name specific players or teams by name.
-- Base your answer on actual standout performances, goals, assists, or form so far in the tournament.
-- If it is genuinely too early to say, name 2 to 3 early contenders instead of refusing to answer.
-- Do not just describe scorelines. Talk about individual or team performance.
+- Name specific teams.
+- Base your answer on actual results and form shown above.
 - Stay neutral and factual. Do not invent stats you are not confident about.
 - No greetings, no introductions.
 
