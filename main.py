@@ -4,7 +4,14 @@ import logging
 import sys
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+    MessageHandler,
+    filters
+)
 from telegram.constants import ChatAction
 from database import init_db, add_user, get_followed_teams, get_stats, log_activity
 from alerts import get_alerts_handler
@@ -176,6 +183,23 @@ Format:
 ⚽ Final Verdict
 
 Keep under 150 words."""
+
+    elif any(phrase in text for phrase in ["best player", "best team", "who should win", "who will win", "top scorer", "most goals", "player of the tournament"]):
+        prompt = f"""{wc_context}
+
+You are Goalclue.
+
+Answer this question using your football knowledge: {user_message}
+
+Rules:
+- Name specific players or teams by name.
+- Base your answer on actual standout performances, goals, assists, or form so far in the tournament.
+- If it is genuinely too early to say, name 2 to 3 early contenders instead of refusing to answer.
+- Do not just describe scorelines. Talk about individual or team performance.
+- Stay neutral and factual. Do not invent stats you are not confident about.
+- No greetings, no introductions.
+
+Keep under 120 words."""
 
     elif any(text.startswith(w) for w in ["what is", "what are", "how does", "how do", "why", "explain", "who is", "who are"]):
         prompt = f"""{wc_context}
